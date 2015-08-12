@@ -58,3 +58,8 @@ target/
 
 # OS
 .DS_Store
+
+# test file
+test.py
+dump.py
+
