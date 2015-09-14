@@ -5,4 +5,3 @@ Source: dump.py modified the var 'addr'(cookie) in this file and run as python s
 简单说下脱壳工具实现原理： 可以参考zjdroid的实现，对内存直接进行dump，但是由于加固后dex文件并不是在内存中连续存放的，但依然满足dex的文件格式（通过将代码段移动到其他地方并将偏移量进行修改）。这里可以参考我的另一个项目DexParse，我把他移植到可在IDA上运行，那么即使在内存中并不连续存放也可以dump出来啦～
 由于测试程序仅有一个，并不能保证没有Bug，如果你有什么发现可以告诉我喔～
 
-欢迎感兴趣的小伙伴一起来学习交流 546052909@qq.com
