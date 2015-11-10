@@ -1,4 +1,8 @@
 # dumpDex
+update 2015.11.10<br>
+对findcookie.py做了一些修改省去了一点点人工劳动，操作步骤如下：<br>
+通过IDA的module模块找到libdvm.so->dvminternalnatimeshutdown（保证光标停留在该函数的第一行即可），然后直接运行这个脚本就可以<br>
+目前测试了Android4.0和4.1，因为直接从汇编代码中抠出地址，应该可以适用于多个版本系统（只测了两个而已。。。）<br>
 update 2015.10.27<br>
 version 2.0<br>
 dump2.py: 首先对代码整体结构进行了大修改，参考[DexHunter](https://github.com/zyq8709/DexHunter)不再对Dex文件结构进行全部解析，代码量一下就少了一半以上，代码有一处需要修改的地方就是DexFile的地址，可以通过1.0中提出的方案，当然也有更优雅的方案，见findcookie.py<br>
