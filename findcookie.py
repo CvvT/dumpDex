@@ -3,9 +3,7 @@ __author__ = 'CwT'
 from idaapi import *
 from idautils import *
 from idc import *
-import struct
-import os
-import hashlib
+import re
 
 def getDword(addr):
     return Dword(addr)
@@ -15,7 +13,7 @@ def getByte(addr):
 
 def getWord(addr):
     return Word(addr)
-    
+
 class DexorJar:
     def __init__(self):
         self.pfileName = 0
@@ -41,9 +39,10 @@ class DexorJar:
             onebyte = getByte(baseaddr)
         print("filename is:", str)
         if self.isDex > 0:
-            print("it's a dex file, addr: ", hex(self.pRawDexFile))
+            pass
+            # print("it's a dex file, addr: ", hex(self.pRawDexFile))
         else:
-            print("it's a jar file, addr: ", hex(self.pJarFile))
+            # print("it's a jar file, addr: ", hex(self.pJarFile))
             jarfile = JarFile()
             jarfile.dump(cookie.pJarFile)
             jarfile.printf()
@@ -68,7 +67,7 @@ class JarFile:
             baseaddr += 1
             one = getByte(baseaddr)
         print("cache file name is : ", str)
-        print("DvmDex addr is :", hex(self.pDvmDex))
+        # print("DvmDex addr is :", hex(self.pDvmDex))
 
 class RawDexFile:
     def __init__(self):
@@ -82,13 +81,16 @@ class RawDexFile:
     def printf(self):
         str = ""
         baseaddr = self.pcacheFileName
+        if baseaddr == 0:
+            print "cache file name is null"
+            return
         one = getByte(baseaddr)
         while one != 0:
             str += chr(one)
             baseaddr += 1
             one = getByte(baseaddr)
         print("cache file name is : ", str)
-        print("DvmDex addr is :", hex(self.pDvmDex))
+        # print("DvmDex addr is :", hex(self.pDvmDex))
 
 class DvmDex:
     def __init__(self):
@@ -103,13 +105,31 @@ class DvmDex:
     def printf(self):
         # i wanna see the diff between the pDexFile.dexfile and pheader
         print("dexfile addr is: ", hex(self.pDexFile))
-        print("header addr is: ", hex(self.pHeader))
+        # print("header addr is: ", hex(self.pHeader))
 
-
-addr = int(0x4030B654)  # find it in dvmlookupclass--->dvmhashtablelookup
-userDex = getDword(addr+640)
+experiment = True
+if experiment:
+    gDvm = 0
+    offset = 0
+    for i in range(10):
+        insn = GetDisasm(here()+i*2)
+        match = re.search(r'PC[\s]*;[\s]*dword_(?P<addr>[0-9A-Z]+)', insn)
+        if match is not None:
+            address = "0x" + match.group('addr')
+            gDvm = Dword(int(address, 16))
+        match = re.search(r'[R[\d]+,#(?P<off>0x[\dA-F]+)]', insn)
+        if match is not None:
+            offset = match.group('off')
+            offset = int(offset, 16)
+    target = gDvm + offset
+else:
+    target = int(0x40DDB654)  # find it in dvminternalnativeshutdown--->dvmHashTableFree
+print "target:", hex(target)
+userDex = getDword(target)
 size = getDword(userDex)
 entry = getDword(userDex+12)
+print "Size:", size
+print "Entry:", hex(entry)
 for i in range(size):
     hash = getDword(entry+8*i)
     item = getDword(entry+8*i+4)
