@@ -1,4 +1,6 @@
 # dumpDex
+update 2016.1.10<br>
+今天拿到一个ali的样本就顺手测试了下居然失败了。。。花了一天的时间才发现一个之前根本没注意的bug，修改偏移时要记得重新计算块大小<br>
 update 2015.11.10<br>
 对findcookie.py做了一些修改省去了一点点人工劳动，操作步骤如下：<br>
 通过IDA的module模块找到libdvm.so->dvminternalnatimeshutdown（保证光标停留在该函数的第一行即可），然后直接运行这个脚本就可以<br>

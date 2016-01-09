@@ -260,6 +260,10 @@ class DexFile:
         self.dexHeader.methodIdsOff = self.pMethodIds - self.pHeader
         self.dexHeader.protoIdsOff = self.pProtoIds - self.pHeader
         self.dexHeader.classDefsOff = self.pClassDefs - self.pHeader
+        if self.dexHeader.dataOff == 0:
+            self.dexHeader.dataOff = self.dexHeader.classDefsOff + self.dexHeader.classDefsSize*32
+            # We should figure out a new method to fix the data size
+            # self.dexHeader.dataSize = 0x5DD28000 - self.baseAddr - self.dexHeader.dataOff
 
     def copytofile(self):
         classfile = open("classdef", "wb+")
@@ -284,7 +288,7 @@ class DexFile:
                 if classdef.classDataOff < start or classdef.classDataOff > end:
                     need_extra = True
                 classdata = ClassdataItem()
-                classdata.dump(int(self.baseAddr+classdef.classDataOff))
+                classdata.dump(int(self.baseAddr+classdef.classDataOff) & 0xffffffff)
                 if classdata.direct_methods_size:
                     for j in range(classdata.direct_methods_size):
                         method = classdata.direct_methods[j]
@@ -293,14 +297,14 @@ class DexFile:
                                 need_extra = True
                                 method.code_off = 0
                             continue
-                        if method.code_off < start or method.code_off > end:
+                        if (method.code_off < start or method.code_off > end) and method.code_off:
                             need_extra = True
                             codeitem = CodeItem()
-                            codeitem.dump(int(self.baseAddr+method.code_off))
-                            writefile(extra, int(self.baseAddr+method.code_off), codeitem.len)
+                            codeitem.dump(int(self.baseAddr+method.code_off) & 0xffffffff)
+                            writefile(extra, int(self.baseAddr+method.code_off) & 0xffffffff, codeitem.len)
                             method.code_off = total_point
                             total_point += codeitem.len
-                            while total_point&3:
+                            while (total_point & 3):
                                 extra.write(struct.pack("B", 0))
                                 total_point += 1
                 if classdata.virtual_methods_size:
@@ -311,27 +315,31 @@ class DexFile:
                                 need_extra = True
                                 method.code_off = 0
                             continue
-                        if method.code_off < start or method.code_off:
+                        if (method.code_off < start or method.code_off > end) and method.code_off:
                             need_extra = True
                             codeitem = CodeItem()
-                            codeitem.dump(int(self.baseAddr+method.code_off))
-                            writefile(extra, int(self.baseAddr+method.code_off), codeitem.len)
+                            codeitem.dump(int(self.baseAddr+method.code_off) & 0xffffffff)
+                            writefile(extra, int(self.baseAddr+method.code_off) & 0xffffffff, codeitem.len)
                             method.code_off = total_point
                             total_point += codeitem.len
-                            while total_point&3:
+                            while (total_point & 3):
                                 extra.write(struct.pack("B", 0))
                                 total_point += 1
             if need_extra:
                 classdef.classDataOff = total_point
                 classdata.copytofile(extra)
+                classdata.recallLength()    # re-calculate the length of this structure
                 total_point += classdata.len
-                while total_point&3:
+                while (total_point & 3):
                     extra.write(struct.pack("B", 0))
                     total_point += 1
-            print "des", descriptor
+                print "des", descriptor
+            if need_pass:
+                classdef.classDataOff = 0
             classdef.copytofile(classfile)
         optdex = self.pOptHeader + self.OptHeader.depsOffset
-        writefile(extra, optdex, self.OptHeader.optOffset-self.OptHeader.depsOffset+self.OptHeader.optLength)
+        if optdex != 0:
+            writefile(extra, optdex, self.OptHeader.optOffset-self.OptHeader.depsOffset+self.OptHeader.optLength)
         extra.close()
         classfile.close()
         self.OptHeader.optOffset = total_point + self.OptHeader.optOffset - self.OptHeader.depsOffset + 40
@@ -351,7 +359,8 @@ class DexFile:
 
     def saveHeaderandData(self):
         header = open("header", "wb+")
-        self.OptHeader.copytofile(header)
+        if self.pOptHeader != 0:
+            self.OptHeader.copytofile(header)
         self.dexHeader.copytofile(header)
         writefile(header, self.pStringIds, self.pClassDefs-self.pStringIds)
         header.close()
@@ -506,6 +515,8 @@ class OptHeader:
         self.checksum = 0
 
     def dump(self, addr):
+        if addr == 0:
+            return
         len = 0
         while len < 8:
             self.magic.append(getByte(addr + len))
@@ -575,6 +586,22 @@ class ClassdataItem:
             self.len += method.len
             self.virtual_methods.append(method)
 
+    def recallLength(self):
+        self.len = 0
+        self.len += unsignedleb128forlen(self.static_field_size)
+        self.len += unsignedleb128forlen(self.instance_fields_size)
+        self.len += unsignedleb128forlen(self.direct_methods_size)
+        self.len += unsignedleb128forlen(self.virtual_methods_size)
+        for i in range(0, self.static_field_size):
+            self.len += self.static_fields[i].len
+        for i in range(0, self.instance_fields_size):
+            self.len += self.instance_fields[i].len
+        for i in range(0, self.direct_methods_size):
+            self.len += self.direct_methods[i].recallLength()
+        for i in range(0, self.virtual_methods_size):
+            self.len += self.virtual_methods[i].recallLength()
+        return self.len
+
     def copytofile(self, file):
         writeunsignedleb128(self.static_field_size, file)
         writeunsignedleb128(self.instance_fields_size, file)
@@ -622,6 +649,13 @@ class Encodedmethod:
         self.code_off, length = readunsignedleb128(addr + self.len)
         self.len += length
 
+    def recallLength(self):
+        self.len = 0
+        self.len += unsignedleb128forlen(self.method_idx_diff)
+        self.len += unsignedleb128forlen(self.access_flags)
+        self.len += unsignedleb128forlen(self.code_off)
+        return self.len
+
     def copytofile(self, file):
         writeunsignedleb128(self.method_idx_diff, file)
         writeunsignedleb128(self.access_flags, file)
@@ -644,12 +678,12 @@ class CodeItem:
         self.handler = None
 
     def dump(self, addr):
-        self.register_size = getWord(addr)
-        self.ins_size = getWord(addr + 2)
-        self.outs_size = getWord(addr + 4)
-        self.tries_size = getWord(addr + 6)
-        self.debug_info_off = getDword(addr + 8)
-        self.insns_size = getDword(addr + 12)
+        self.register_size = getWord(addr)  # 2
+        self.ins_size = getWord(addr + 2)   # 0
+        self.outs_size = getWord(addr + 4)  # 0x4187
+        self.tries_size = getWord(addr + 6)     # 0x13
+        self.debug_info_off = getDword(addr + 8)    # 0xD
+        self.insns_size = getDword(addr + 12)   # 0x22
         self.len += 16
         for i in range(0, self.insns_size):
             self.insns.append(getWord(addr + self.len + 2 * i))
@@ -665,9 +699,9 @@ class CodeItem:
             self.handler = EncodedhandlerList()
             self.handler.dump(addr + self.len)
             self.len += self.handler.len
-        align = self.len % 4
-        if align != 0:
-            self.len += (4 - align)
+        # align = self.len % 4
+        # if align != 0:
+        #     self.len += (4 - align)
 
 class TryItem:
     def __init__(self):
@@ -733,7 +767,7 @@ class EncodedTypeAddrPair:
         self.addr, length = readunsignedleb128(addr + length)
         self.len += length
 
-address = int(0x5c9a0800)   #DexFile address
+address = int(0x5b6031c0)   # DexFile address
 dexfile = DexFile()
 dexfile.dump(address)
 dexfile.dexHeader.printf()
