@@ -1,4 +1,12 @@
 # dumpDex
+基于IDA python的Android DEX内存dump工具
+
+## Usage
+First: 通过IDA的module模块找到libdvm.so->dvminternalnatimeshutdown（保证光标停留在该函数的第一行即可），然后运行
+findcookie.py
+Second: 从控制台的输出中找到合适的DexFile address（通常有多个，通过name进行判断），修改dump2.py中倒数5行的address，然后运行dump2.py
+
+## update log
 update 2016.1.10<br>
 今天拿到一个ali的样本就顺手测试了下居然失败了。。。花了一天的时间才发现一个之前根本没注意的bug，修改偏移时要记得重新计算块大小<br>
 update 2015.11.10<br>
