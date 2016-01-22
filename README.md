@@ -3,7 +3,7 @@
 
 ## Usage
 First: 通过IDA的module模块找到libdvm.so->dvminternalnatimeshutdown（保证光标停留在该函数的第一行即可），然后运行
-findcookie.py
+findcookie.py<br>
 Second: 从控制台的输出中找到合适的DexFile address（通常有多个，通过name进行判断），修改dump2.py中倒数5行的address，然后运行dump2.py
 
 ## update log
