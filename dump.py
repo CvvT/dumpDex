@@ -241,6 +241,26 @@ class DexorJar:
         else:
             print("it's a jar file, addr: ", hex(self.pJarFile))
 
+class RawDexFile:
+    def __init__(self):
+        self.pcacheFileName = 0
+        self.pDvmDex = 0
+
+    def dump(self, addr):
+        self.pcacheFileName = getDword(addr)
+        self.pDvmDex = getDword(addr+4)
+
+    def printf(self):
+        str = ""
+        baseaddr = self.pcacheFileName
+        one = getByte(baseaddr)
+        while one != 0:
+            str += chr(one)
+            baseaddr += 1
+            one = getByte(baseaddr)
+        print("cache file name is : ", str)
+        print("DvmDex addr is :", hex(self.pDvmDex))
+
 class JarFile:
     def __init__(self):
         self.archive = None     # do not care
@@ -248,7 +268,7 @@ class JarFile:
         self.pDvmDex = 0
 
     def dump(self, addr):
-        self.pcacheFileName = getDword(addr + 36)
+        self.pcacheFileName = getDword(addr + 36)   # skip archive struct
         self.pDvmDex = getDword(addr + 40)
 
     def printf(self):
@@ -303,7 +323,7 @@ class DexFile:
         self.pFieldIds = getDword(addr + 16)
         self.pMethodIds = getDword(addr + 20)
         self.pProtoIds = getDword(addr + 24)
-        self.pProtoIds = getDword(addr + 28)
+        self.pClassDefs = getDword(addr + 28)
         self.pLinkData = getDword(addr + 32)
         self.baseAddr = getDword(addr + 44)
         baseAddr = self.baseAddr
@@ -399,13 +419,13 @@ class DexHeader:
         self.protoIdsSize = getDword(addr + 72)
         self.protoIdsOff = getDword(addr + 76)
         self.fieldIdsSize = getDword(addr + 80)
-        self.fieldIdsOff = getDword(addr + 88)
-        self.methodIdsSize = getDword(addr + 92)
-        self.methodIdsOff = getDword(addr + 96)
-        self.classDefsSize = getDword(addr + 100)
-        self.classDefsOff = getDword(addr + 104)
-        self.dataSize = getDword(addr + 108)
-        self.dataOff = getDword(addr + 112)
+        self.fieldIdsOff = getDword(addr + 84)
+        self.methodIdsSize = getDword(addr + 88)
+        self.methodIdsOff = getDword(addr + 92)
+        self.classDefsSize = getDword(addr + 96)
+        self.classDefsOff = getDword(addr + 100)
+        self.dataSize = getDword(addr + 104)
+        self.dataOff = getDword(addr + 108)
 
     def makeoffset(self, dexmaplist):
         self.stringIdsSize = dexmaplist[1].size
@@ -2129,7 +2149,7 @@ class ParamterAnnotation:
     def getreference(self, dexmaplist):
         self.annotations_off_ref = dexmaplist[0x1002].getreference(self.annotations_off)
 
-addr = 1558176632
+addr = int(0x4108D978)
 print(hex(addr))
 cookie = DexorJar()
 cookie.dump(addr)
@@ -2140,7 +2160,10 @@ if cookie.isDex == 0:
     jarfile.printf()
     dvmaddr = jarfile.pDvmDex
 else:
-    print("not support yet")
+    rawDex = RawDexFile()
+    rawDex.dump(cookie.pRawDexFile)
+    rawDex.printf()
+    dvmaddr = rawDex.pDvmDex
 dvmDex = DvmDex()
 dvmDex.dump(dvmaddr)
 dvmDex.printf()

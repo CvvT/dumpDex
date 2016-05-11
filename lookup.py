@@ -265,110 +265,28 @@ class DexFile:
             # We should figure out a new method to fix the data size
             # self.dexHeader.dataSize = 0x5DD28000 - self.baseAddr - self.dexHeader.dataOff
 
-    def copytofile(self):
-        classfile = open("classdef", "wb+")
-        extra = open("extra", "wb+")
+    def lookupClass(self, type):
         num_class_def = self.dexHeader.classDefsSize
-        total_point = self.dexHeader.dataOff + self.dexHeader.dataSize
-        start = self.dexHeader.dataOff
-        end = total_point
-        while total_point&3:
-            total_point += 1
         print "num class def:", num_class_def
         for i in range(num_class_def):
             classdef = DexClassDef()
             classdef.dump(self.pClassDefs+32*i)
             descriptor = dexGetClassDescriptor(self, classdef)
-            need_extra = False
-            need_pass = False
-            if descriptor.startswith("Landroid") or classdef.classDataOff == 0:
-                need_pass = True
-            else:
-                tmp = slashtodot(descriptor)
-                if classdef.classDataOff < start or classdef.classDataOff > end:
-                    need_extra = True
+            if descriptor == type:
+                print "Find the class", descriptor
+                if classdef.classDataOff == 0:
+                    print "classDataOff is 0"
+                    return
                 classdata = ClassdataItem()
                 classdata.dump(int(self.baseAddr+classdef.classDataOff) & 0xffffffff)
-                if classdata.direct_methods_size:
-                    for j in range(classdata.direct_methods_size):
-                        method = classdata.direct_methods[j]
-                        if method.access_flags & 0x100:     # native func
-                            if method.code_off:
-                                need_extra = True
-                                method.code_off = 0
-                            continue
-                        if (method.code_off < start or method.code_off > end) and method.code_off:
-                            need_extra = True
-                            codeitem = CodeItem()
-                            codeitem.dump(int(self.baseAddr+method.code_off) & 0xffffffff)
-                            writefile(extra, int(self.baseAddr+method.code_off) & 0xffffffff, codeitem.len)
-                            method.code_off = total_point
-                            total_point += codeitem.len
-                            while (total_point & 3):
-                                extra.write(struct.pack("B", 0))
-                                total_point += 1
-                if classdata.virtual_methods_size:
-                    for j in range(classdata.virtual_methods_size):
-                        method = classdata.virtual_methods[j]
-                        if method.access_flags & 0x100:
-                            if method.code_off:
-                                need_extra = True
-                                method.code_off = 0
-                            continue
-                        if (method.code_off < start or method.code_off > end) and method.code_off:
-                            need_extra = True
-                            codeitem = CodeItem()
-                            codeitem.dump(int(self.baseAddr+method.code_off) & 0xffffffff)
-                            writefile(extra, int(self.baseAddr+method.code_off) & 0xffffffff, codeitem.len)
-                            method.code_off = total_point
-                            total_point += codeitem.len
-                            while (total_point & 3):
-                                extra.write(struct.pack("B", 0))
-                                total_point += 1
-            if need_extra:
-                classdef.classDataOff = total_point
-                classdata.copytofile(extra)
-                classdata.recallLength()    # re-calculate the length of this structure
-                total_point += classdata.len
-                while (total_point & 3):
-                    extra.write(struct.pack("B", 0))
-                    total_point += 1
-                print "des", descriptor
-            if need_pass:
-                classdef.classDataOff = 0
-            classdef.copytofile(classfile)
-        optdex = self.pOptHeader + self.OptHeader.depsOffset
-        if optdex != 0:
-            writefile(extra, optdex, self.OptHeader.optOffset-self.OptHeader.depsOffset+self.OptHeader.optLength)
-        extra.close()
-        classfile.close()
-        self.OptHeader.optOffset = total_point + self.OptHeader.optOffset - self.OptHeader.depsOffset + 40
-        self.OptHeader.depsOffset = total_point + 40
-        self.saveHeaderandData()
-        whole = open("whole.dex", "wb+")
-        with open("header", "rb") as header:
-            whole.writelines(header.readlines())
-        with open("classdef", "rb") as classfile:
-            whole.writelines(classfile.readlines())
-        with open("data", "rb") as data:
-            whole.writelines(data.readlines())
-        with open("extra", "rb") as extra:
-            whole.writelines(extra.readlines())
-        whole.close()
-        print("DONE")
-
-    def saveHeaderandData(self):
-        header = open("header", "wb+")
-        if self.pOptHeader != 0:
-            self.OptHeader.copytofile(header)
-        self.dexHeader.copytofile(header)
-        writefile(header, self.pStringIds, self.pClassDefs-self.pStringIds)
-        header.close()
-        data = open("data", "wb+")
-        addr = self.baseAddr + self.dexHeader.classDefsOff + self.dexHeader.classDefsSize*32
-        length = self.dexHeader.dataSize + self.dexHeader.dataOff - (addr - self.baseAddr)
-        writefile(data, addr, length)
-        data.close()
+                print "direct methods:", classdata.direct_methods_size
+                for j in range(classdata.direct_methods_size):
+                    method = classdata.direct_methods[j]
+                    method.printf()
+                print "virtual methods:", classdata.virtual_methods_size
+                for j in range(classdata.virtual_methods_size):
+                    method = classdata.virtual_methods[j]
+                    method.printf()
 
     def printf(self):
         print("dex head addr: ", hex(self.pHeader))
@@ -661,6 +579,10 @@ class Encodedmethod:
         writeunsignedleb128(self.access_flags, file)
         writeunsignedleb128(self.code_off, file)
 
+    def printf(self):
+        print "code offset:", self.code_off
+        print "access flag:", self.access_flags
+
 # alignment: 4bytes
 class CodeItem:
     def __init__(self):
@@ -771,4 +693,5 @@ address = int(0x5d4e8020)   # DexFile address
 dexfile = DexFile()
 dexfile.dump(address)
 dexfile.dexHeader.printf()
-dexfile.copytofile()
+dexfile.lookupClass("Lcom/baidu/lbsapi/auth/LBSAuthManagerListener;")
+# dexfile.copytofile()
